@@ -1,0 +1,59 @@
+name: Sync upstream main
+
+on:
+  schedule:
+    # Daily at 00:17 UTC (06:02 Nepal time); avoid the busy top of the hour.
+    - cron: '17 0 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sync-upstream-main
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    # This automation belongs to this fork, never to upstream or another fork.
+    if: github.repository == 'sauravniraula/hermes-agent' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      # A fork-scoped deploy key permits syncing workflow-file changes too;
+      # GITHUB_TOKEN cannot grant that permission. Never use a personal token.
+      - name: Check out fork main
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: main
+          fetch-depth: 0
+          ssh-key: ${{ secrets.FORK_SYNC_DEPLOY_KEY }}
+          persist-credentials: true
+
+      - name: Merge upstream without overwriting fork changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git fetch --no-tags https://github.com/NousResearch/hermes-agent.git \
+            refs/heads/main:refs/remotes/upstream/main
+          upstream_sha=$(git rev-parse refs/remotes/upstream/main)
+
+          if git merge-base --is-ancestor "$upstream_sha" HEAD; then
+            printf 'Already includes upstream main at `%s`.\n' "$upstream_sha" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          # Ordinary merges preserve fork commits. Conflicts stop the run;
+          # neither conflict resolution nor force pushes are automated.
+          if ! git merge --no-edit -m 'chore(sync): merge upstream main' "$upstream_sha"; then
+            git merge --abort
+            printf '::error::Upstream main conflicts with fork main. Resolve the merge manually; no remote changes were pushed.\n'
+            exit 1
+          fi
+
+          # A concurrent change to main rejects this push rather than losing work.
+          git push origin HEAD:refs/heads/main
+          printf 'Merged upstream main `%s` into fork main at `%s`.\n' \
+            "$upstream_sha" "$(git rev-parse HEAD)" >> "$GITHUB_STEP_SUMMARY"
