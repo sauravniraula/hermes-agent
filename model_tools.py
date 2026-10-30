@@ -332,7 +332,8 @@ def _select_tool_names(enabled_toolsets: Optional[list[str]], disabled_toolsets:
     # disabled toolset are strictly stripped out. See issue #17309.
     if disabled_toolsets:
         _apply_toolset_selection(tools, disabled_toolsets, quiet_mode, disable=True)
-    return tools
+    from hermes_cli.toolset_policy import restrict_profile_tool_names
+    return restrict_profile_tool_names(tools)
 
 
 # --- Dynamic schema rewrites -------------------------------------------------

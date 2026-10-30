@@ -2021,15 +2021,14 @@ def _inject_context_engine_tools(agent):
     # shared list pre-#17335, so a stray mutation here would poison subsequent agent inits in the same
     # Gateway process and trip provider-side 'duplicate tool name' errors. Even with the cache fix, dedup is
     # the right defense against plugin paths that may register the same schemas via ctx.register_tool().
-    # Mirrors the memory tools dedup above. Respect the platform's enabled_toolsets configuration (#5544):
-    # context engine tools follow the same gating pattern as memory provider tools — without the gate,
-    # `platform_toolsets: telegram: []` would still leak lcm_* tools into the tool surface and incur the
-    # same local-model latency penalty.
+    # Mirror memory-provider gating, including the profile-wide allowlist (#5544).
+    from hermes_cli.toolset_policy import profile_allows_toolset
     agent._context_engine_tool_names: set = set()
     if (
         agent.context_compressor
         and agent.tools is not None
         and (agent.enabled_toolsets is None or "context_engine" in agent.enabled_toolsets)
+        and profile_allows_toolset("context_engine")
     ):
         _existing_tool_names = {
             t.get("function", {}).get("name") for t in agent.tools if isinstance(t, dict)

@@ -23,8 +23,11 @@ Hermes keeps its working-set core tools (`terminal`, `read_file`, `write_file`,
 may be deferred when they are named in `tools.tool_search.defer`; the shipped
 curated list covers tools such as `computer_use`, `session_search`, and selected
 desktop helpers. MCP and non-core plugin tools remain eligible automatically.
-An explicit `defer` list replaces the curated list, and `defer: []` keeps every
-tool eager.
+An explicit `defer` list replaces the curated list, and `defer: []` removes
+explicit built-in deferrals; MCP and non-core plugin tools still defer.
+Alternatively, configure `tools.tool_search.eager_toolsets` to keep every tool
+in the listed enabled toolsets direct and defer everything else, including
+core tools. `defer_toolsets` adds whole toolsets to the default deferred set.
 :::
 
 ## How it works
@@ -110,7 +113,9 @@ tools:
     max_search_limit: 25
     listing: auto       # embed a grouped name+description catalog manifest
     listing_max_tokens: 4000
-    defer:              # replace the curated default; [] keeps every tool eager
+    eager_toolsets: null # null = legacy policy; a list = only these toolsets stay eager
+    defer_toolsets: []   # additional whole toolsets to defer; eager_toolsets takes precedence
+    defer:              # legacy per-tool override of the curated list
       - computer_use
       - session_search
       - image_generate
@@ -132,10 +137,59 @@ shipped curated set; the runtime fallback uses the same value.
 | `max_search_limit` | `25` | Hard upper bound the model can request via `limit` (per query). Range 1–50. |
 | `listing` | `auto` | Embed a skills-style manifest of every deferred tool (name + first sentence of its description, ≤60 chars, grouped by MCP server) in the `tool_search` bridge description. `auto` includes it when it fits the budget (falling back to names-only, then to the tier-2 server summary); `on`/`off` force either way. |
 | `listing_max_tokens` | `4000` | Absolute cap on the embedded listing, regardless of context size. Range 200–60000. Large catalogs degrade to names-only or per-server summaries, keeping full schemas available through search. |
-| `defer` | Curated list | Tool names replaced by the bridge by default. The list may include cold built-in tools as well as MCP/plugin tools; an explicit list replaces it, and `[]` disables deferral for every tool. |
+| `eager_toolsets` | `null` | Every tool in these toolsets stays directly exposed; **all other enabled tools defer**. Includes core, GUI, MCP and plugin toolsets and tools from composite includes. `[]` defers all enabled tools; bridge tools always stay direct. Overrides `defer_toolsets` and legacy `defer`. Omitted/`null` preserves the legacy/default policy. |
+| `defer_toolsets` | `[]` | Additionally defer every tool in these toolsets, on top of the legacy/default deferrals. New members discovered later follow the same policy. Ignored when `eager_toolsets` is a list. |
+| `defer` | Curated list | Existing per-tool compatibility setting. An explicit list replaces the curated list; `[]` removes explicit built-in deferrals, but MCP/non-core plugin tools still defer. Prefer toolset-level controls for new configuration. |
 
 Per-call array caps are internal safety bounds, not configuration. Over-cap
 calls return an error so the model can retry with a smaller batch.
+
+### Keep a small eager working set
+
+Use `eager_toolsets` instead of maintaining an exhaustive list of tools to defer:
+
+```yaml
+tools:
+  tool_search:
+    enabled: auto
+    eager_toolsets:
+      - terminal
+      - file
+      - clarify
+      - mcp-notes        # optional: a connected server's toolset (or its bare alias)
+```
+
+This keeps both `terminal` and `process_manage` eager via `terminal`, and all
+four file tools (`read_file`, `write_file`, `patch`, `search_files`) via `file`.
+Every other enabled tool is accessible through the bridge. Toolsets expand
+recursively through their includes; plugin/MCP members discovered later are
+covered automatically. Names are case-sensitive toolset names, not individual
+tool names or glob patterns (the standard `all`/`*` toolset sentinels retain
+their existing meaning). Shared tools are eager if any allowlisted toolset
+contains them. The allowlist never enables a disabled tool, connects a server,
+or bypasses session/platform restrictions. Hosted `connectors__` schemas remain
+on-demand through the gateway and cannot be pinned in the local tools array.
+
+Without an eager allowlist, defer whole toolsets in addition to the defaults:
+
+```yaml
+tools:
+  tool_search:
+    defer_toolsets: [web, browser, image_gen]
+```
+
+`eager_toolsets` takes precedence if both lists are configured. An explicit
+empty eager list (`eager_toolsets: []`) leaves only the bridge directly exposed;
+an empty defer list adds no toolset deferrals. Include frequently needed
+toolsets such as `clarify` to avoid extra discovery round trips. Setting
+`eager_toolsets: null` restores the default/legacy policy plus `defer_toolsets`.
+`enabled: "off"` bypasses disclosure policy and exposes all enabled tools
+directly. Invalid non-list values or non-string list entries warn and are
+ignored. The existing per-tool `defer` key remains supported for compatibility;
+there is no new per-tool `eager` setting.
+
+Start a new session after changing these settings; they are not a request to
+rewrite the tool surface of an in-progress conversation.
 
 ### Why the listing exists
 

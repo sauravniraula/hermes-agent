@@ -1,8 +1,8 @@
 """Progressive tool disclosure ("tool search"): MCP/plugin tools and a curated set of
 event-triggered core tools are replaced in the model-visible array by three bridge tools —
 tool_search / tool_describe / tool_call. Invariants: core tools (``toolsets._HERMES_CORE_TOOLS``)
-and session-gated GUI toolsets never defer unless named in ``defer``; ANY deferrable tool
-activates the bridge (the listing scales with budget, not activation); the catalog is
+and session-gated GUI toolsets stay direct unless a disclosure toolset policy or legacy ``defer`` says
+otherwise; ANY deferrable tool activates the bridge (the listing scales with budget, not activation); the catalog is
 stateless — rebuilt from the live tool-defs every assembly (a session-keyed one drifts and
 silently drops tools); bridge calls route through ``model_tools.handle_function_call``."""
 
@@ -52,10 +52,18 @@ class ToolSearchConfig:
     listing_max_tokens: int = 4000  # budget = min(this, threshold_pct% of context)
     # None = curated default; an explicit list replaces it wholesale ([] = defer no core tools).
     defer_tools: Optional[frozenset] = None
+    # Toolset policies resolve live membership, including tools discovered after config parsing.
+    eager_toolsets: Optional[frozenset] = None  # None = legacy policy; [] = defer everything.
+    defer_toolsets: frozenset = frozenset()
 
     @property
     def effective_defer_tools(self) -> frozenset:
-        return _DEFAULT_DEFERRED_TOOLS if self.defer_tools is None else self.defer_tools
+        legacy = _DEFAULT_DEFERRED_TOOLS if self.defer_tools is None else self.defer_tools
+        return legacy | _expand_disclosure_toolsets(self.defer_toolsets)
+
+    @property
+    def effective_eager_tools(self) -> Optional[frozenset]:
+        return None if self.eager_toolsets is None else _expand_disclosure_toolsets(self.eager_toolsets)
 
     @classmethod
     def from_raw(cls, raw: Any) -> ToolSearchConfig:
@@ -70,7 +78,7 @@ class ToolSearchConfig:
             # tool surface and got nothing — never silently ignore it (#116404).
             logger.warning(
                 "tools.tool_search.defer is %r, expected a YAML list of tool names "
-                "(e.g. [todo_list, computer_use]; [] keeps every tool eager) - "
+                "(e.g. [todo_list, computer_use]; [] removes explicit built-in deferrals) - "
                 "using the curated default set.", defer_raw)
             defer_raw = None
         return cls(
@@ -82,7 +90,25 @@ class ToolSearchConfig:
             listing=_tri_state(raw.get("listing", "auto")),
             listing_max_tokens=_clamped_int(raw.get("listing_max_tokens"), 4000, 200, 60000),
             defer_tools=(frozenset(str(n).strip() for n in defer_raw if str(n).strip())
-                         if isinstance(defer_raw, (list, tuple, set)) else None))
+                         if isinstance(defer_raw, (list, tuple, set)) else None),
+            eager_toolsets=_configured_disclosure_toolsets(raw, "eager_toolsets"),
+            defer_toolsets=_configured_disclosure_toolsets(raw, "defer_toolsets") or frozenset())
+
+
+def _configured_disclosure_toolsets(raw: dict, key: str) -> Optional[frozenset]:
+    value = raw.get(key)
+    if value is None:
+        return None
+    if not isinstance(value, list) or any(not isinstance(name, str) for name in value):
+        logger.warning("tools.tool_search.%s must be a YAML list of toolset names or null; ignoring it", key)
+        return None
+    return frozenset(name for name in value if name)
+
+
+def _expand_disclosure_toolsets(names: frozenset) -> frozenset:
+    from toolsets import resolve_toolset
+
+    return frozenset(tool for name in names for tool in resolve_toolset(name))
 
 
 _TRI_STATE_ALIASES = {"true": "on", "1": "on", "yes": "on", "false": "off", "0": "off", "no": "off"}
@@ -141,18 +167,22 @@ _DIRECT_SURFACE_TOOLSETS = CLIENT_SURFACE_TOOLSETS | TOOLSET_SESSION_PLATFORMS.k
 
 # Event-triggered tools deferred BY DEFAULT (a catalog stub suffices). Keep the curated
 # list in DEFAULT_CONFIG so config discovery and runtime behavior cannot drift. An explicit
-# ``defer`` list replaces this wholesale ([] = everything eager). ``clarify`` is deliberately
+# ``defer`` list replaces this wholesale ([] = no explicit built-in deferrals). ``clarify`` is deliberately
 # absent: A/B showed deferring it collapsed structured-clarify usage (18/18 -> 7/18) — the
 # ask-the-user affordance must be ambient, a stub is not enough.
 _DEFAULT_DEFERRED_TOOLS = frozenset(DEFAULT_CONFIG["tools"]["tool_search"]["defer"])
 
 
-def is_deferrable_tool_name(name: str, defer_tools: Optional[frozenset] = None) -> bool:
-    """True if a tool is *eligible* for deferral: named in ``defer_tools`` (curated set or
+def is_deferrable_tool_name(name: str, defer_tools: Optional[frozenset] = None,
+                            eager_tools: Optional[frozenset] = None) -> bool:
+    """An explicit eager allowlist takes precedence over every default/defer rule.
+    Otherwise a tool is eligible if named in ``defer_tools`` (curated set or
     user override), OR an MCP tool, OR neither core nor a session-gated GUI surface (i.e. a
     plugin tool). Bridge names never defer."""
-    if name in BRIDGE_TOOL_NAMES:
+    if not name or name in BRIDGE_TOOL_NAMES:
         return False
+    if eager_tools is not None:
+        return name not in eager_tools
     if defer_tools is not None and name in defer_tools:
         return True
     if name in _core_tool_names():
@@ -175,6 +205,7 @@ def session_tool_names(tool_defs: Iterable[dict[str, Any]]) -> frozenset[str]:
 
 
 def classify_tools(tool_defs: list[dict[str, Any]], defer_tools: Optional[frozenset] = None,
+                   eager_tools: Optional[frozenset] = None,
                    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """Split a tool-defs list into (visible, deferrable); bridge tools are dropped (re-added
     after classification)."""
@@ -182,13 +213,15 @@ def classify_tools(tool_defs: list[dict[str, Any]], defer_tools: Optional[frozen
     deferrable: list[dict[str, Any]] = []
     for td, name in zip(tool_defs, _tool_def_names(tool_defs)):
         if name not in BRIDGE_TOOL_NAMES:
-            (deferrable if is_deferrable_tool_name(name, defer_tools) else visible).append(td)
+            (deferrable if is_deferrable_tool_name(name, defer_tools, eager_tools) else visible).append(td)
     return visible, deferrable
 
 
-def _deferrable_in(tool_defs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _deferrable_in(tool_defs: list[dict[str, Any]],
+                   config: Optional[ToolSearchConfig] = None) -> list[dict[str, Any]]:
     """Deferrable subset of pre-assembly ``tool_defs`` under the read-only user config."""
-    return classify_tools(tool_defs, load_config_readonly().effective_defer_tools)[1]
+    config = config or load_config_readonly()
+    return classify_tools(tool_defs, config.effective_defer_tools, config.effective_eager_tools)[1]
 
 
 def estimate_tokens_from_schemas(tool_defs: Iterable[dict[str, Any]]) -> int:
@@ -348,7 +381,7 @@ def assemble_tool_defs(tool_defs: list[dict[str, Any]], *, context_length: Optio
     config = config or load_config()
     incoming = [td for td, name in zip(tool_defs, _tool_def_names(tool_defs))
                 if name not in BRIDGE_TOOL_NAMES]
-    visible, deferrable = classify_tools(incoming, config.effective_defer_tools)
+    visible, deferrable = classify_tools(incoming, config.effective_defer_tools, config.effective_eager_tools)
     connections_granted = connections_in_scope(incoming)
     if not deferrable:
         if should_activate(config, 0, context_length, connections_granted=connections_granted):
@@ -448,7 +481,7 @@ def dispatch_tool_search(args: dict[str, Any], *, current_tool_defs: list[dict[s
     raw_limit = args.get("limit")
     limit = (config.search_default_limit if raw_limit is None
              else _clamped_int(raw_limit, config.search_default_limit, 1, config.max_search_limit))
-    catalog = build_catalog(_deferrable_in(current_tool_defs))
+    catalog = build_catalog(_deferrable_in(current_tool_defs, config))
     remote_entries: list[list[CatalogEntry]] = [[] for _ in queries]
     hosted_failure: Optional[str] = None
     if connections_in_scope(current_tool_defs):
@@ -502,7 +535,7 @@ def dispatch_tool_describe(args: dict[str, Any], *, current_tool_defs: list[dict
         retry_hint="Retry with fewer names per call.")
     if err:
         return err
-    deferrable = _deferrable_in(current_tool_defs)
+    deferrable = _deferrable_in(current_tool_defs, config)
     by_name = {name: _fn(td) for td, name in zip(deferrable, _tool_def_names(deferrable)) if name}
     remote_schemas, hosted_failure = remote_schemas_for(names, current_tool_defs, connector_describe, call=call)
 
@@ -526,7 +559,7 @@ def dispatch_tool_describe(args: dict[str, Any], *, current_tool_defs: list[dict
             # A core tool absent here, deferred or not: tool_search cannot surface it.
             errors[name] = unavailable
         elif _registry_entry(name) is not None and not is_deferrable_tool_name(
-            name, load_config_readonly().effective_defer_tools):
+            name, config.effective_defer_tools, config.effective_eager_tools):
             # Registered but bridge/core/GUI-surface: a real name, wrong door.
             errors[name] = not_deferrable_error(name, session_names)
         else:
@@ -546,9 +579,7 @@ def scoped_deferrable_names(tool_defs: list[dict[str, Any]]) -> frozenset[str]:
     """Deferrable names in the *pre-assembly* ``tool_defs`` of the session scope — the
     universe ``tool_call`` may reach. Gates bridge dispatch AND the executor unwrap so a
     restricted session cannot invoke an out-of-scope tool via the bridge."""
-    defer_tools = load_config_readonly().effective_defer_tools
-    return frozenset(n for n in _tool_def_names(tool_defs)
-                     if n and is_deferrable_tool_name(n, defer_tools))
+    return frozenset(n for n in _tool_def_names(_deferrable_in(tool_defs)) if n)
 
 
 def out_of_scope_reason(name: str) -> Optional[str]:
@@ -611,7 +642,8 @@ def resolve_underlying_call(args: dict[str, Any], session_tool_names: Optional[I
     unavailable = session_unavailable_error(name, session_tool_names)
     if unavailable:
         return None, {}, unavailable
-    if not is_deferrable_tool_name(name, load_config_readonly().effective_defer_tools):
+    config = load_config_readonly()
+    if not is_deferrable_tool_name(name, config.effective_defer_tools, config.effective_eager_tools):
         return None, {}, not_deferrable_error(name, session_tool_names)
     return name, raw_args, None
 

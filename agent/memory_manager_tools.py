@@ -27,6 +27,9 @@ def normalize_tool_schema(schema: Any) -> Optional[dict[str, Any]]:
 def memory_provider_tools_enabled(enabled_toolsets: Optional[list[str]], disabled_toolsets: Optional[list[str]] = None,
                                   *, memory_tool_present: bool = False) -> bool:
     """Return whether external memory-provider tools should be exposed."""
+    from hermes_cli.toolset_policy import profile_allows_toolset
+    if not profile_allows_toolset("memory"):
+        return False
     if disabled_toolsets and "memory" in disabled_toolsets:
         return False
     if memory_tool_present or enabled_toolsets is None:

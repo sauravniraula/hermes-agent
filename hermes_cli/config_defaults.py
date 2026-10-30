@@ -264,6 +264,7 @@ DEFAULT_CONFIG = {
         # provider or get a last-chance text fallback); "text" = always pre-analyze with
         # vision_analyze and prepend the description. vision_analyze stays a tool regardless.
         "image_input_mode": "auto",
+        "enabled_toolsets": None,  # Profile-wide allowlist; None = platform defaults, [] = no tools.
         "disabled_toolsets": [],
         # Model name (any reasonable spelling) -> effort level; overrides agent.reasoning_effort
         # when the current model matches. Edit in config.yaml (no CLI support: dots in keys).
@@ -1974,13 +1975,10 @@ DEFAULT_CONFIG = {
     # may include cold, event-triggered built-ins as well as plugin/MCP tools.
     "tools": {
         "tool_search": {
-            # Tiered: tier 0 (no deferred tools) = everything eager; tier 1 = bridge + a
-            # name+description manifest when it fits the budget (degrades to names-only); tier 2
-            # (over budget even names-only, e.g. ~3,300-tool APIs) = bare bridge + a
-            # one-line-per-server summary (name + tool count). "auto"|"on" = activate when at least
-            # one deferred tool exists ("auto" is an alias of "on" today, reserved for a future
-            # budget-gated mode; keep it the default so explicit "on"/"off" pins are unaffected).
-            # "off" = pass-through, no bridge.
+            # "auto"|"on" activates whenever any tool defers; "off" = pass-through, no bridge.
+            # "auto" is currently an alias of "on", reserved for a future budget-gated mode.
+            # The listing degrades from name+description to names-only to per-server summaries
+            # as the budget shrinks; with no deferred tools, everything stays eager (tier 0).
             "enabled": "auto",
             # Listing budget as % of the model's context length; effective budget = min(this % of
             # context, listing_max_tokens). Range 0..100.
@@ -1997,9 +1995,9 @@ DEFAULT_CONFIG = {
             # Absolute cap on the embedded listing in tokens (chars/4), regardless of context size.
             # Range 200..60000.
             "listing_max_tokens": 4000,
-            # Tools replaced by the bridge by default. This list intentionally includes cold,
-            # event-triggered built-ins; an explicit list replaces it wholesale and [] keeps every
-            # tool eager. The runtime fallback in tools/tool_search.py derives from this value.
+            "eager_toolsets": None,  # Only these toolsets stay eager; None = legacy, [] = defer all.
+            "defer_toolsets": [],  # Additional whole toolsets to defer; eager_toolsets wins.
+            # Legacy per-tool curated deferrals; [] clears them (MCP/plugin tools still defer).
             "defer": [
                 "computer_use", "session_search", "image_generate",
                 "todo_list", "process_manage", "cronjob_manage", "browser_vault",
