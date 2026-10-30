@@ -357,6 +357,7 @@ def _reinject_post_build_tools(agent, tools_list: list, name_set: set) -> set:
         getter = getattr(getattr(agent, attr, None) or None, method, None)
         return getter if callable(getter) else None
 
+    from hermes_cli.toolset_policy import profile_allows_toolset
     enabled = getattr(agent, "enabled_toolsets", None)
     try:
         get_mem_schemas = _schema_getter("_memory_manager", "get_all_tool_schemas")
@@ -376,7 +377,7 @@ def _reinject_post_build_tools(agent, tools_list: list, name_set: set) -> set:
     staged_engine_names: set = set()
     try:
         get_schemas = _schema_getter("context_compressor", "get_tool_schemas")
-        if (enabled is None or "context_engine" in enabled) and get_schemas is not None:
+        if (enabled is None or "context_engine" in enabled) and get_schemas is not None and profile_allows_toolset("context_engine"):
             # Claim the routing name only when WE appended the schema.
             staged_engine_names.update(s["name"] for s in get_schemas() if _add(s))
     except Exception:

@@ -996,6 +996,52 @@ The MCP threshold is always capped at the (possibly context-scaled) generic per-
 
 Hermes also flags **provider-side elision**: when an MCP or web tool result embeds its own truncation markers (`...N more items`, `"has_more": true`, "saved to sandbox" notes), a one-line notice is appended to the result warning that the visible data is incomplete and should be paged/fetched before treating any enumeration as complete.
 
+## Global Toolset Allowlist
+
+To select toolsets once for **every platform in the active profile**, use
+`agent.enabled_toolsets`:
+
+```yaml
+agent:
+  enabled_toolsets:
+    - terminal
+    - file
+    - skills
+    - web
+  disabled_toolsets:
+    - web          # disabled always wins, even when also enabled above
+```
+
+A list replaces per-platform selections and defaults for CLI, TUI/Desktop,
+messaging platforms and scheduled agents. Unlisted MCP servers, plugin toolsets,
+platform-native defaults and context-engine tools are not added automatically.
+List an MCP server by its configured name or `mcp-<name>` toolset name to include
+it; it must still be enabled in `mcp_servers`. Plugin toolsets must likewise
+be installed and enabled. Platform restrictions and tool availability checks
+still apply. Composite toolsets expand to their constituent tools, and tools
+shared by an allowed toolset remain available.
+
+| Value | Behavior |
+| --- | --- |
+| Omitted or `null` (default) | Preserve existing per-platform/default selection. |
+| A YAML list of toolset names | Only those toolsets are selected across this profile. |
+| `[]` | No toolsets enabled, including automatically discovered MCP/plugin toolsets. |
+| Malformed non-list or non-string entries | Warn and select no toolsets rather than falling back to a broader default. |
+
+Names are literal and case-sensitive. Caller-specific restrictions (for example
+a subagent's narrower toolset selection) remain narrower; they cannot expand
+past this profile-wide ceiling. `agent.disabled_toolsets` is applied last.
+Other profiles are unaffected. While the allowlist is configured, per-platform
+changes made with `hermes tools` do not override it: update the global list or
+set it to `null` to return control to the platform picker. This selects toolsets,
+not non-toolset capabilities such as an independently authorized Bot Chat relay.
+
+Tool Search is a separate layer: `tools.tool_search.eager_toolsets` and
+`defer_toolsets` decide which **enabled** toolsets get schemas immediately,
+not which toolsets are enabled.
+Start a new session after changing these settings; existing conversation
+tool schemas are not rewritten by this option.
+
 ## Global Toolset Disable
 
 To suppress specific toolsets across the CLI and every gateway platform in one

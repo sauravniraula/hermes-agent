@@ -1231,6 +1231,13 @@ skills:
 # Agent Behavior
 # =============================================================================
 agent:
+  # Profile-wide toolset allowlist for EVERY platform. null preserves platform defaults;
+  # [] enables no toolsets. A list overrides platform_toolsets and implicit MCP/plugin additions.
+  # enabled_toolsets: [terminal, file, skills, web]
+  enabled_toolsets: null
+  # Global suppression still wins over the allowlist (including shared tools in bundles).
+  disabled_toolsets: []
+
   # Maximum tool-calling iterations per conversation (default: 500)
   # Higher = more room for complex tasks, but costs more tokens
   # Recommended: 20-30 for focused tasks, 50-100 for open exploration
@@ -1431,6 +1438,20 @@ gateway:
 # =============================================================================
 # Control which tools the agent has access to.
 # Use `hermes tools` to interactively enable/disable tools per platform.
+
+# Progressive disclosure controls exposure, not which tools are enabled.
+tools:
+  tool_search:
+    enabled: "auto"  # "off" exposes all enabled tools directly.
+    # Keep every tool in these toolsets eager; defer all other enabled tools.
+    # null preserves legacy defaults; [] defers all. Bridge tools stay visible.
+    # Example: eager_toolsets: [terminal, file, clarify]
+    eager_toolsets: null
+    # Without an eager allowlist, additionally defer every tool in these toolsets.
+    # Example: defer_toolsets: [web, browser, image_gen]
+    defer_toolsets: []
+    # eager_toolsets takes precedence. Neither setting enables disabled tools.
+    # Start a new session after changing this configuration.
 
 # =============================================================================
 # Platform Toolsets (per-platform tool configuration)

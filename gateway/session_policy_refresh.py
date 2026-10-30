@@ -62,7 +62,7 @@ def _settings(policy, config, live, picked):
     keys += [] if chosen else ['reasoning_effort', 'reasoning_overrides']
     toolsets = policy.toolsets
     if 'toolsets' not in request and policy.editor_mcp_json is None:
-        keys.append('disabled_toolsets')
+        keys.extend(('enabled_toolsets', 'disabled_toolsets'))
         _follow(config, live, 'platform_toolsets')
         toolsets = tuple(sorted(_resolve_toolsets({}, live, policy.source, policy.safe_mode, policy.coding_posture)))
     for key in keys:
