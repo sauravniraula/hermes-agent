@@ -78,6 +78,7 @@ The install also ships `hermes-agent`, a minimal runner that sends one query and
 | `hermes approvals` | Approval-prompt tools — mine approval history into allowlist proposals. |
 | `hermes dump` | Copy-pasteable setup summary for support/debugging. |
 | `hermes prompt-size` | Show a byte breakdown of the system prompt + tool schemas (skills index, memory, profile). Runs offline. |
+| `hermes request-dump FILE` | Export a fresh, redacted provider-native request without sending inference. Supports `--platform` and named profiles. |
 | `hermes debug` | Debug tools — upload logs and system info for support. |
 | `hermes backup` | Back up Hermes home directory to a zip file. |
 | `hermes checkpoints` | Inspect / prune / clear `~/.hermes/checkpoints/` (the shadow store used by `/rollback`). Run with no args for a status overview. |
@@ -1072,6 +1073,36 @@ config_overrides:
 :::tip
 `hermes dump` is specifically designed for sharing. For interactive diagnostics, use `hermes doctor`. For a visual overview, use `hermes status`.
 :::
+
+## `hermes request-dump`
+
+```bash
+hermes request-dump request.json
+hermes request-dump request-whatsapp.json --platform whatsapp
+hermes -p coder request-dump request-coder.json --platform cli
+hermes request-dump preview.json --prompt "Explain this project" --model MODEL --provider PROVIDER
+```
+
+Build a **fresh** request from the selected profile and current working directory, using the real
+agent's prompt, available tools, configured disclosure policy, model/provider routing and native
+request builder. The default platform is `cli`; `--platform` also accepts `tui` and registered
+messaging platforms. The user prompt defaults to empty. Provider normalization still applies:
+Anthropic's converter represents a blank message as `(empty message)`.
+
+The output is the JSON **body**, not an HTTP envelope: Chat Completions uses `messages`,
+Responses/Codex uses `instructions`/`input`, and native Anthropic uses `system`/`messages`.
+SDK-only arguments, authentication headers and HTTP query arguments are excluded; `extra_body`
+is merged as the SDK would merge it. Secrets are always redacted, even when ordinary redaction
+is disabled. The command refuses existing files (including symlinks), creates new files with
+private permissions, and returns nonzero on failure. The destination directory must exist.
+
+No model inference, agent conversation or tool execution is performed. Normal provider
+authentication, metadata lookup, memory-provider initialization and MCP/tool discovery may
+contact configured services. A configured model/route and its normal credentials are required;
+`--model`/`--provider` override them for this export. This is a request-builder preview, **not**
+a capture of an existing session, its history, turn-time routing, or per-attempt middleware/hooks.
+It does not install anything or alter a running conversation. Redacted files may still contain
+private memory and project instructions: inspect them before sharing.
 
 ## `hermes debug`
 
