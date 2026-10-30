@@ -1419,6 +1419,18 @@ gateway:
 # Control which tools the agent has access to.
 # Use `hermes tools` to interactively enable/disable tools per platform.
 
+# Progressive disclosure controls exposure, not which tools are enabled.
+tools:
+  tool_search:
+    enabled: "auto"  # "off" exposes all enabled tools directly, ignoring eager/defer.
+    # null (default) uses the curated defer list plus automatic MCP/plugin deferral.
+    # A list keeps ONLY these exact names eager; all other enabled tools defer.
+    # [] defers every enabled tool. Bridge tools always stay visible.
+    # Takes precedence over defer; never enables disabled/unavailable tools.
+    # Restart/start a new session after changing this configuration.
+    eager: null
+    # Example: eager: [terminal, read_file, write_file, patch, search_files, clarify]
+
 # =============================================================================
 # Platform Toolsets (per-platform tool configuration)
 # =============================================================================

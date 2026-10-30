@@ -23,8 +23,10 @@ Hermes keeps its working-set core tools (`terminal`, `read_file`, `write_file`,
 may be deferred when they are named in `tools.tool_search.defer`; the shipped
 curated list covers tools such as `computer_use`, `session_search`, and selected
 desktop helpers. MCP and non-core plugin tools remain eligible automatically.
-An explicit `defer` list replaces the curated list, and `defer: []` keeps every
-tool eager.
+An explicit `defer` list replaces the curated list, and `defer: []` removes
+explicit built-in deferrals; MCP and non-core plugin tools still defer.
+Alternatively, configure `tools.tool_search.eager` to keep only the listed
+enabled tools direct and defer everything else, including core tools.
 :::
 
 ## How it works
@@ -110,7 +112,8 @@ tools:
     max_search_limit: 25
     listing: auto       # embed a grouped name+description catalog manifest
     listing_max_tokens: 4000
-    defer:              # replace the curated default; [] keeps every tool eager
+    eager: null         # null = default policy; a list = defer everything except these names
+    defer:              # replace the curated default; ignored when eager is a list
       - computer_use
       - session_search
       - image_generate
@@ -132,10 +135,48 @@ shipped curated set; the runtime fallback uses the same value.
 | `max_search_limit` | `25` | Hard upper bound the model can request via `limit` (per query). Range 1–50. |
 | `listing` | `auto` | Embed a skills-style manifest of every deferred tool (name + first sentence of its description, ≤60 chars, grouped by MCP server) in the `tool_search` bridge description. `auto` includes it when it fits the budget (falling back to names-only, then to the tier-2 server summary); `on`/`off` force either way. |
 | `listing_max_tokens` | `4000` | Absolute cap on the embedded listing, regardless of context size. Range 200–60000. Large catalogs degrade to names-only or per-server summaries, keeping full schemas available through search. |
-| `defer` | Curated list | Tool names replaced by the bridge by default. The list may include cold built-in tools as well as MCP/plugin tools; an explicit list replaces it, and `[]` disables deferral for every tool. |
+| `eager` | `null` | Exact tool names to expose directly. When a list is configured, **all other enabled tools defer**, including core, GUI, MCP and plugin tools. `[]` defers every enabled tool; bridge tools always stay direct. Overrides `defer`. Omitted/`null` preserves the default policy. |
+| `defer` | Curated list | Tool names replaced by the bridge by default. An explicit list replaces the curated list; `[]` removes explicit built-in deferrals, but MCP/non-core plugin tools still defer. Ignored when `eager` is a list. |
 
 Per-call array caps are internal safety bounds, not configuration. Over-cap
 calls return an error so the model can retry with a smaller batch.
+
+### Keep a small eager working set
+
+Use `eager` instead of maintaining an exhaustive list of tools to defer:
+
+```yaml
+tools:
+  tool_search:
+    enabled: auto
+    eager:
+      - terminal
+      - read_file
+      - write_file
+      - patch
+      - search_files
+      - clarify
+      - mcp__notes__fetch  # optional: use the exact name from your connected server
+```
+
+Only listed tools that are already enabled and available get full schemas in
+the model's tools array. Every other enabled tool is accessible through
+`tool_search` / `tool_describe` / `tool_call`. This also lets you keep selected
+MCP or plugin tools eager. Names are exact and case-sensitive, not toolset
+names or wildcard patterns. The allowlist never enables a disabled tool,
+connects a server, or bypasses session/platform restrictions. Hosted
+`connectors__` tools remain on-demand through the connector gateway; their
+schemas are not part of the local tools array to pin eager.
+
+An explicit empty list (`eager: []`) leaves only the bridge directly exposed.
+Include frequently needed tools such as `clarify` to avoid extra discovery
+round trips. Setting `eager: null` (or removing it) restores the existing
+`defer`/automatic MCP/plugin policy; `enabled: "off"` bypasses both settings
+and exposes all enabled tools directly. Invalid non-list `eager` values log
+a warning and fall back to the existing policy.
+
+Start a new session after changing these settings; they are not a request to
+rewrite the tool surface of an in-progress conversation.
 
 ### Why the listing exists
 
