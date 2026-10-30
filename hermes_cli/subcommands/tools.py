@@ -22,6 +22,11 @@ def build_tools_parser(subparsers, *, cmd_tools: Callable) -> None:
         "list", help="Show all tools and their enabled/disabled status")
     tools_list_p.add_argument("--platform", default="cli", help="Platform to show (default: cli)")
 
+    tools_breakdown = tools_sub.add_parser("breakdown", help="List active/direct/deferred tools and estimated token sizes")
+    tools_breakdown.add_argument("--platform", default="cli", help="Platform to inspect (default: cli)")
+    tools_breakdown.add_argument("--json", action="store_true", help="Output machine-readable JSON")
+    tools_breakdown.set_defaults(func=_cmd_breakdown)
+
     tools_disable_p = tools_sub.add_parser("disable", help="Disable toolsets or MCP tools")
     tools_disable_p.add_argument(
         "names", nargs="+", metavar="NAME",
@@ -48,3 +53,9 @@ def build_tools_parser(subparsers, *, cmd_tools: Callable) -> None:
         "post_setup_key", metavar="KEY",
         help="Post-setup hook key (e.g. chromium, cua_driver, kittentts)")
     tools_parser.set_defaults(func=cmd_tools)
+
+
+def _cmd_breakdown(args) -> int:
+    from hermes_cli.capability_breakdown import cmd_tools_breakdown
+
+    return cmd_tools_breakdown(args)

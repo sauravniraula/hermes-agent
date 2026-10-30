@@ -72,6 +72,11 @@ def build_skills_parser(subparsers, *, cmd_skills: Callable) -> None:
         help="Hide disabled skills. Use with -p <profile> to see exactly "
         "which skills will load for that profile.")
 
+    skills_breakdown = skills_subparsers.add_parser("breakdown", help="List enabled skills and estimated token sizes")
+    skills_breakdown.add_argument("--platform", default="cli", help="Platform to inspect (default: cli)")
+    add_json_flag(skills_breakdown, "Output machine-readable JSON")
+    skills_breakdown.set_defaults(func=_cmd_breakdown)
+
     skills_check = skills_subparsers.add_parser(
         "check", help="Check installed hub skills for updates")
     skills_check.add_argument("name", nargs="?", help="Specific skill to check (default: all)")
@@ -175,3 +180,9 @@ def build_skills_parser(subparsers, *, cmd_skills: Callable) -> None:
         "config", help="Interactive skill configuration — enable/disable individual skills")
 
     skills_parser.set_defaults(func=cmd_skills)
+
+
+def _cmd_breakdown(args) -> int:
+    from hermes_cli.capability_breakdown import cmd_skills_breakdown
+
+    return cmd_skills_breakdown(args)

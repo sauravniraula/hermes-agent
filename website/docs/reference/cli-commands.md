@@ -1444,6 +1444,7 @@ Subcommands:
 | `install` | Install a skill. |
 | `inspect` | Preview a skill without installing it. |
 | `list` | List installed skills. |
+| `breakdown` | List enabled/loadable skills with estimated index-entry and full-file token costs. |
 | `check` | Check installed hub skills for upstream updates. |
 | `update` | Reinstall hub skills with upstream changes when available. |
 | `audit` | Re-scan installed hub skills. |
@@ -1472,6 +1473,8 @@ hermes skills install https://example.com/SKILL.md --name my-skill        # Over
 hermes skills check
 hermes skills update
 hermes skills config
+hermes skills breakdown --platform cli
+hermes -p coder skills breakdown --platform whatsapp --json
 hermes skills reset google-workspace
 hermes skills reset google-workspace --restore --yes
 hermes skills opt-out                  # stop future bundled-skill seeding (nothing deleted)
@@ -1486,6 +1489,20 @@ Notes:
 - `--source well-known` lets you point Hermes at a site exposing `/.well-known/skills/index.json`.
 - `--source browse-sh` searches [browse.sh](https://browse.sh)'s catalog of 200+ site-specific browser-automation skills. Identifiers look like `browse-sh/airbnb.com/search-listings-ddgioa`.
 - Passing an `http(s)://…/*.md` URL installs `SKILL.md` plus explicitly referenced files under `references/`, `templates/`, `scripts/`, `assets/`, and `examples/`. When frontmatter has no `name:` and the URL slug isn't a valid identifier, an interactive terminal prompts for a name; non-interactive surfaces (`/skills install` inside the TUI, gateway platforms) require `--name <x>` instead.
+
+### Skill token breakdown
+
+`hermes skills breakdown [--platform PLATFORM] [--json]` applies profile/platform enabled and
+disabled lists plus the existing trust, compatibility and plugin-discovery gates. It lists
+policy-enabled skill files even when the skills toolset itself is off; in that case index costs
+are zero and JSON reports `skills_toolset_enabled: false`.
+
+`index_tokens` estimates an advertised entry; `index_total_tokens` also includes shared headings
+and loading instructions. `file_tokens` estimates the raw `SKILL.md` if read, not an upfront
+charge; it excludes supporting files and preprocessing/template expansion. An unreadable file
+has a null file cost. Counts use Hermes' Unicode-aware `estimate_tokens_rough`, **not** an exact
+provider tokenizer or billing measurement. Human output explicitly labels estimates; `--json`
+includes `estimated: true` and `token_method`.
 
 ## `hermes bundles`
 
@@ -1731,6 +1748,28 @@ hermes tools [--summary]
 | `--summary` | Print the current enabled-tools summary and exit. |
 
 Without `--summary`, this launches the interactive per-platform tool configuration UI.
+
+### Tool token breakdown
+
+```bash
+hermes tools breakdown
+hermes tools breakdown --platform whatsapp --json
+hermes -p coder tools breakdown --platform cli
+```
+
+List the selected profile's available tools and their current disclosure policy. **Active** is
+the union of **direct** and **deferred** tools, including discovery bridge and agent-injected
+tools; it is not a history of tools already called. Availability checks, profile allowlists,
+disabled toolsets, plugin/MCP gates, and eager/deferred settings remain authoritative.
+An inspection agent collects post-registry memory/context-engine tools without requiring
+inference credentials. Configured service/tool discovery may still contact services.
+
+Each row shows the full schema's estimated `tokens` and `upfront_tokens` (zero for deferred
+schemas). Deferred-tool catalog text is counted in the direct search bridge, so zero does not
+mean deferred tools are entirely free. `direct_schema_tokens` estimates the complete direct
+schema array. These are canonical Chat Completions-style schema estimates using Hermes'
+`estimate_tokens_rough`, not exact provider-native tokenization, billing, or conversation/tool
+result costs. JSON includes the full list, `counts`, `estimated: true`, and `token_method`.
 
 ## `hermes computer-use`
 
