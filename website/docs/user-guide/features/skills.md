@@ -70,6 +70,26 @@ All of these paths write a `.no-bundled-skills` marker into the profile director
 `hermes skills opt-out` only stops *future* seeding — it never deletes anything already on disk. The optional `--remove` flag deletes bundled skills **only** when they are unmodified (byte-identical to the version Hermes installed). Skills you have edited, skills installed from the hub, and skills you wrote yourself are always kept.
 :::
 
+## Selecting skills by profile and platform
+
+To keep only a chosen set available, use `skills.enabled` and `skills.platform_enabled`:
+
+```yaml
+skills:
+  enabled: [github, arxiv]
+  platform_enabled:
+    cli: [github]
+    telegram: [arxiv]
+```
+
+`enabled: null` (the default) is unrestricted; `enabled: []` selects only the essential
+`hermes-agent` skill. Platform lists intersect the profile list, and disabled lists still win.
+An omitted/null platform entry adds no restriction; an empty list permits essentials only.
+This policy applies both to discovery and explicit loading, including preloads and bundles;
+`auto_load` cannot re-enable a skill. New sessions receive the updated prompt index.
+See [Selecting available skills](../configuration.md#selecting-available-skills) for exact-name,
+plugin, duplicate-path, validation, and precedence rules.
+
 ## Using Skills
 
 Every installed skill is automatically available as a slash command:

@@ -826,6 +826,44 @@ hermes config set skills.config.myplugin.path ~/myplugin-data
 
 For details on declaring config settings in your own skills, see [Creating Skills — Config Settings](../developer-guide/creating-skills.md#config-settings-configyaml).
 
+### Selecting available skills
+
+Use allowlists to offer only a chosen set of installed skills in the active profile:
+
+```yaml
+skills:
+  enabled: [github, arxiv, my-workflow]  # Profile-wide ceiling, every platform
+  platform_enabled:
+    cli: [github, my-workflow]
+    telegram: [arxiv]
+  disabled: []
+  platform_disabled: {}
+```
+
+- `skills.enabled` omitted or `null` preserves unrestricted discovery. A list selects only
+  those exact skill names; `[]` excludes every nonessential skill.
+- `skills.platform_enabled` defaults to `{}`. A platform list further narrows the profile
+  allowlist (intersection), never widens it. A missing or `null` entry adds no restriction;
+  `[]` excludes all nonessential skills on that platform. Platform keys name session surfaces
+  such as `cli`, `tui`, `gui`, `telegram`, or `discord`, not operating systems.
+- `skills.disabled` and `skills.platform_disabled` still win. The essential `hermes-agent`
+  operating manual remains available even when omitted from an allowlist or explicitly disabled.
+- Names match exactly, without case folding, whitespace trimming, or wildcards. Use names from
+  `skills_list`: qualified `plugin:skill` names for plugin skills, and exact advertised relative
+  paths for same-tier duplicates. A declared duplicate name selects all its copies; it does not
+  resolve ambiguity or change project/local/external precedence.
+- Malformed allowlists (anything other than a list of strings or `null`) warn and exclude
+  nonessential skills. A malformed `platform_enabled` mapping does the same.
+- Selection applies to prompt indexes, listings, slash commands, `skill_view` (including support
+  files), preloads, auto-loads, and bundle members. It does not install skills, override project
+  trust, quarantine, compatibility, or disabled-plugin checks, or prevent direct filesystem access.
+- Existing skill-toggle menus manage disabled lists; they cannot override an allowlist. Change
+  the allowlist itself to admit additional skills. `skills.auto_load` is a preload list, not an
+  alternative enablement setting.
+
+Start a new session to update its system-prompt skill index; existing conversation prefixes
+are not rewritten. Listings and explicit loads check current selection policy.
+
 ### Auto-loading skills every session
 
 Pin skills so they are fully loaded at the start of every new session, on every surface:

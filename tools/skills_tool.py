@@ -16,6 +16,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from hermes_constants import get_hermes_home
 from tools.registry import registry, tool_error
 from hermes_cli.config import cfg_get
+from agent.skill_selection import get_enabled_skill_names, is_enabled_entry, skill_is_selected
 from agent.skill_utils import (
     EXCLUDED_SKILL_DIRS as _EXCLUDED_SKILL_DIRS, is_skill_support_path as _is_skill_support_path)
 from tools.skills_tool_setup import (
@@ -74,7 +75,7 @@ def _dir_tree_signature(root, sig, depth=_SIGNATURE_MAX_DEPTH) -> None:
             _dir_tree_signature(os.path.join(root, name), sig, depth - 1)
 
 
-def _skills_scan_signature(dirs_to_scan, disabled) -> tuple:
+def _skills_scan_signature(dirs_to_scan, disabled, enabled) -> tuple:
     """Stat-based change signature over every directory the catalog walks; platform is read via
     ``agent.skill_utils.sys`` so test patches are honored."""
     from agent import skill_utils as _skill_utils
@@ -82,7 +83,7 @@ def _skills_scan_signature(dirs_to_scan, disabled) -> tuple:
     sig: list = []
     for d in dirs_to_scan:
         _dir_tree_signature(str(d), sig)
-    return (tuple(sig), frozenset(disabled), platform)
+    return (tuple(sig), frozenset(disabled), platform, enabled)
 
 
 HERMES_HOME = get_hermes_home()  # all skills live in ~/.hermes/skills/ (seeded from bundled)
@@ -200,6 +201,9 @@ def _is_skill_disabled(*names: str, platform: str | None = None) -> bool:
     ``HERMES_PLATFORM``, session ``HERMES_SESSION_PLATFORM``. A globally-disabled skill stays disabled on every platform
     (keep in sync with agent.skill_utils.get_disabled_skill_names)."""
     try:
+        from agent.skill_utils import ESSENTIAL_SKILLS
+        if not ESSENTIAL_SKILLS.isdisjoint(names):
+            return False
         from hermes_cli.config import load_config
         skills_cfg = load_config().get("skills", {})
         resolved_platform = platform or os.getenv("HERMES_PLATFORM")
@@ -235,8 +239,9 @@ def _skill_catalog(*, skip_disabled: bool = False, include_hidden: bool = False)
         TIER_PROJECT, is_disabled_entry, iter_project_skill_files, iter_skill_index_files, resolve_skill_catalog)
     cache_key = ("with_disabled" if skip_disabled else "filtered", include_hidden)
     disabled = set() if skip_disabled else _get_disabled_skill_names()
+    enabled = None if skip_disabled else get_enabled_skill_names()
     roots, _ = skill_search_dirs()
-    signature = _skills_scan_signature([d for _t, d in roots], disabled)
+    signature = _skills_scan_signature([d for _t, d in roots], disabled, enabled)
     now = time.monotonic()
     cached = _SKILLS_CACHE.get(cache_key)
     if cached is not None and cached[0] == signature and (now - cached[1]) < _SKILLS_CACHE_TTL_SECONDS:
@@ -267,7 +272,7 @@ def _skill_catalog(*, skip_disabled: bool = False, include_hidden: bool = False)
             except Exception as e:
                 logger.debug("Skipping skill at %s: failed to parse: %s", skill_md, e, exc_info=True)
     skills = [s for s in resolve_skill_catalog(scanned)
-              if (s.pop("visible") or include_hidden) and not is_disabled_entry(s, disabled)]
+              if (s.pop("visible") or include_hidden) and not is_disabled_entry(s, disabled) and is_enabled_entry(s, enabled)]
     # Keyed by the signature computed BEFORE the scan: a write racing the scan changes the
     # signature, so the next call re-scans instead of serving a torn result.
     _SKILLS_CACHE[cache_key] = (signature, now, skills)
@@ -277,7 +282,7 @@ def _skill_catalog(*, skip_disabled: bool = False, include_hidden: bool = False)
 def find_all_skills(*, skip_disabled: bool = False) -> list[dict[str, Any]]:
     """Loadable skills (name, description, category): ``name`` is what skill_view() accepts —
     the declared name, or the exact relative path for a same-tier duplicate. Shadowed and
-    unloadable copies are left out. ``skip_disabled=True`` ignores disabled state (config UI)."""
+    unloadable copies are left out. ``skip_disabled=True`` ignores selection policy (config UI)."""
     return [{"name": s["load_name"], "description": s["description"], "category": s["category"]}
             for s in _skill_catalog(skip_disabled=skip_disabled) if s["load_name"]]
 
@@ -295,9 +300,11 @@ def skills_list(category: str | None = None, task_id: str | None = None) -> str:
         try:
             from hermes_cli.plugins import discover_plugins, get_plugin_manager
             discover_plugins()
+            enabled = get_enabled_skill_names()
             for plugin_skill in get_plugin_manager().list_plugin_skill_metadata():
                 frontmatter = plugin_skill.pop("frontmatter", {})
-                if not skill_matches_platform(frontmatter) or _is_skill_disabled(plugin_skill["name"]):
+                if (not skill_matches_platform(frontmatter) or _is_skill_disabled(plugin_skill["name"])
+                        or not skill_is_selected(enabled, plugin_skill["name"])):
                     continue
                 all_skills.append(plugin_skill)
         except Exception:
@@ -610,6 +617,21 @@ def _log_security_warnings(name: str, skill_md: Path, content: str, all_dirs, ac
         logger.warning("Skill security warning for '%s': %s", name, "; ".join(warnings))
 
 
+def _skill_selection_error(resolved_name, skill_dir, skill_md, all_dirs) -> str | None:
+    """Resolve policy on the selected file, not whichever alias reached it."""
+    rel = _owned_relative(skill_dir, skill_md, all_dirs)
+    enabled = get_enabled_skill_names()
+    if not skill_is_selected(enabled, resolved_name) and not any(
+            e["path"] == skill_md and is_enabled_entry(e, enabled)
+            for e in _skill_catalog(skip_disabled=True, include_hidden=True)):
+        return _fail(f"Skill '{resolved_name}' is excluded by skills.enabled or skills.platform_enabled.")
+    # A path matches only when it is this copy's advertised load name, not an unrelated alias.
+    if _is_skill_disabled(resolved_name, rel) and (_is_skill_disabled(resolved_name) or any(
+            e["path"] == skill_md and e["load_name"] == rel for e in _skill_catalog(skip_disabled=True, include_hidden=True))):
+        return _fail(f"Skill '{resolved_name}' is disabled. Enable it with `hermes skills` or inspect the files directly on disk.")
+    return None
+
+
 def skill_view(
     name: str, file_path: str | None = None, task_id: str | None = None, preprocess: bool = True) -> str:
     """View a skill (SKILL.md) or a file within its directory, as JSON. ``name`` is a skill name
@@ -644,12 +666,8 @@ def skill_view(
         if not skill_matches_platform(frontmatter):
             return _fail(f"Skill '{name}' is not supported on this platform.", readiness_status=SkillReadinessStatus.UNSUPPORTED.value)
         resolved_name = frontmatter.get("name", skill_md.parent.name)
-        # Disabled by declared name, or by the exact path that IS this copy's load name (a same-tier
-        # duplicate's row) — whatever alias reached it; an unrelated copy at that path elsewhere is not.
-        rel = _owned_relative(skill_dir, skill_md, all_dirs)
-        if _is_skill_disabled(resolved_name, rel) and (_is_skill_disabled(resolved_name) or any(
-                e["path"] == skill_md and e["load_name"] == rel for e in _skill_catalog(skip_disabled=True, include_hidden=True))):
-            return _fail(f"Skill '{resolved_name}' is disabled. Enable it with `hermes skills` or inspect the files directly on disk.")
+        if selection_error := _skill_selection_error(resolved_name, skill_dir, skill_md, all_dirs):
+            return selection_error
         if file_path and skill_dir:
             return _serve_skill_file(
                 skill_dir, file_path, name, list_available=True, mark_read=True,

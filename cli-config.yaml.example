@@ -1200,6 +1200,19 @@ streaming:
 # also create new skills after completing complex tasks.
 #
 skills:
+  # Skill availability in this profile, on every platform. null/omitted = all;
+  # [] = essential hermes-agent skill only. Exact names from skills_list (plugin:skill
+  # for plugins; exact relative load paths for same-tier duplicate names).
+  enabled: null
+  # Per-platform allowlists intersect enabled; never re-enable an excluded skill.
+  # An omitted/null platform entry adds no restriction; [] permits essentials only.
+  platform_enabled: {}
+  # platform_enabled:
+  #   cli: [github, swe]
+  #   telegram: [arxiv]
+  # disabled and platform_disabled still win, except for essential hermes-agent.
+  # These settings select skills; auto_load only preloads already-selected skills.
+
   # Nudge the agent to create skills after complex tasks.
   # Every N tool-calling iterations, remind the model to consider saving a skill.
   # Set to 0 to disable.

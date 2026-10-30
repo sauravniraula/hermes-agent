@@ -596,9 +596,10 @@ def _skill_dirs_signature() -> Optional[tuple]:
     rescanning on every lookup. Any other error raises: the catalog scan itself takes the same signature
     unguarded (``tools.skills_tool._skill_catalog``), and a swallowed bug would pin a stale map silently."""
     from tools.skills_tool import _get_disabled_skill_names, skill_search_dirs, _skills_scan_signature
+    from agent.skill_selection import get_enabled_skill_names
     try:
         roots, _active = skill_search_dirs()
-        return _skills_scan_signature([d for _tier, d in roots], _get_disabled_skill_names())
+        return _skills_scan_signature([d for _tier, d in roots], _get_disabled_skill_names(), get_enabled_skill_names())
     except OSError:
         logger.debug("Skill dir signature failed", exc_info=True)
         return None
@@ -656,6 +657,7 @@ def get_plugin_skill_commands() -> dict[str, dict[str, Any]]:
     """
     from agent.skill_utils import get_disabled_skill_names
     from hermes_cli.plugins import discover_plugins, get_plugin_manager
+    from agent.skill_selection import get_enabled_skill_names, skill_is_selected
     from hermes_cli.plugins_content import plugin_skill_owners
     from hermes_cli.plugins_discovery import _get_disabled_plugins
     from hermes_constants import get_hermes_home
@@ -669,13 +671,15 @@ def get_plugin_skill_commands() -> dict[str, dict[str, Any]]:
     if not is_fresh:
         cached = _scan_plugin_skill_commands(manager, metadata, tag)
     disabled = get_disabled_skill_names()
+    enabled = get_enabled_skill_names()
     disabled_plugins = _get_disabled_plugins()
-    if not disabled and not disabled_plugins:
+    if not disabled and not disabled_plugins and enabled is None:
         return cached
     return {
         key: info for key, info in cached.items()
         if not (info["name"] in disabled or info["name"].split(":", 1)[1] in disabled
                 or plugin_skill_owners(manager, info["name"]) & disabled_plugins)
+        and skill_is_selected(enabled, info["name"])
     }
 
 
@@ -887,7 +891,7 @@ def _disabled_skill_names(platform: str | None = None) -> set:
 def _load_skill_blocks(
     identifiers: list[str], load, activation_note, task_id: str | None, *,
     missing_label=lambda ident: ident, disabled_names: set | None = None, disabled_as_missing: bool = False,
-    already_loaded: set | None = None,
+    already_loaded: set | None = None, enabled_names: frozenset[str] | None = None,
 ) -> tuple[list[str], list[str], list[str], list[str]]:
     """Load each distinct identifier via *load* and render its block; returns
     ``(loaded_names, missing, disabled, blocks)``. With *disabled_names*, members
@@ -895,6 +899,7 @@ def _load_skill_blocks(
     disabled go to ``disabled`` (or ``missing`` when *disabled_as_missing*).
     Canonical names in *already_loaded* (e.g. skills.auto_load) count as resolved
     but render no block, so one skill never lands in the prompt twice."""
+    from agent.skill_selection import skill_is_selected
     loaded_names: list[str] = []
     missing: list[str] = []
     disabled: list[str] = []
@@ -909,8 +914,9 @@ def _load_skill_blocks(
             missing.append(missing_label(identifier))
             continue
         skill_name = loaded[2]
-        if disabled_names and (skill_name in disabled_names or identifier in disabled_names
-                               or (":" in skill_name and skill_name.split(":", 1)[1] in disabled_names)):
+        if (not skill_is_selected(enabled_names, skill_name, identifier)
+                or disabled_names and (skill_name in disabled_names or identifier in disabled_names
+                                      or (":" in skill_name and skill_name.split(":", 1)[1] in disabled_names))):
             if disabled_as_missing:
                 missing.append(identifier)
             else:

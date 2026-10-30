@@ -149,6 +149,7 @@ def build_bundle_invocation_message(
         return None
     # Late import keeps skill_bundles cheap to import (no tools/* at import time).
     from agent.skill_commands import _disabled_skill_names, _load_skill_blocks, _load_skill_payload, _scaffold_header
+    from agent.skill_selection import get_enabled_skill_names
     bundle_name = info["name"]
     loaded_names, missing, disabled, skill_blocks = _load_skill_blocks(
         [(skill_id or "").strip() for skill_id in info["skills"]],
@@ -156,6 +157,7 @@ def build_bundle_invocation_message(
         lambda _name: f'[Loaded as part of the "{bundle_name}" skill bundle.]',
         task_id,
         disabled_names=_disabled_skill_names(platform),
+        enabled_names=get_enabled_skill_names(platform),
     )
     if not skill_blocks:
         return None
