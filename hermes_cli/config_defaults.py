@@ -1433,10 +1433,11 @@ DEFAULT_CONFIG = {
     # Skills — external skill directories shared across tools/agents. Paths are expanded (~, ${VAR})
     # and resolved; read-only — creation goes to ~/.hermes/skills/ unless create_dir redirects it.
     "skills": {
+        "enabled": None,  # Profile-wide allowlist; null = unrestricted, [] = essential skills only.
+        "platform_enabled": {},  # Per-platform allowlists narrow the profile ceiling; disabled wins.
         "external_dirs": [],   # e.g. ["~/.agents/skills", "/shared/team-skills"]
-        # Where skill_manage-created skills go (empty = profile-local dir). When set, new skills
-        # land here AND agent-facing instructions name this path; expanded (~, ${VAR}), relative to
-        # HERMES_HOME, scanned alongside the local dir.
+        # New skills land here (empty = profile-local), scanned alongside the local dir;
+        # expanded (~, ${VAR}), relative to HERMES_HOME; agent instructions follow this path.
         "create_dir": "",
         # In a git checkout, <root>/.hermes/skills/ and <root>/.agents/skills/ load as the
         # highest-precedence tier — ONLY if the root is in trusted_project_dirs. false = no scan, no
@@ -1470,7 +1471,6 @@ DEFAULT_CONFIG = {
         # Audit ledger: every skill mutation appends to ~/.hermes/skills/.curator_ledger.jsonl with
         # before/after hashes (blobs under ~/.hermes/.curator_backups/blobs/); powers `hermes
         # curator ledger` / `rollback <entry-id>`. Never a gate — failures can't block.
-        # See #79686.
         "ledger": True,
         # Size cap for that ledger: once the file grows past this, the next append rewrites it
         # through the unchanged-file dedup and, if still over, drops the oldest entries (0 = keep

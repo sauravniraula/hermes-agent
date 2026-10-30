@@ -196,6 +196,7 @@ def _iter_gateway_skills(platform: str):
     from pathlib import Path
 
     from agent.skill_commands import get_skill_commands
+    from agent.skill_selection import get_enabled_skill_names, skill_is_selected
     from agent.skill_utils import (
         get_disabled_skill_names, get_external_skills_dirs, get_project_skills_dirs)
     from tools.skills_tool import SKILLS_DIR
@@ -204,6 +205,7 @@ def _iter_gateway_skills(platform: str):
         disabled = get_disabled_skill_names(platform=platform)
     except Exception:
         disabled = set()
+    enabled = get_enabled_skill_names(platform)
     hub_dir = (SKILLS_DIR / ".hub").resolve()
     roots = [SKILLS_DIR.resolve()]
     for getter in (get_external_skills_dirs, get_project_skills_dirs):
@@ -225,7 +227,8 @@ def _iter_gateway_skills(platform: str):
         if sp.is_relative_to(hub_dir):
             continue
         root = next((r for r in roots if sp.is_relative_to(r)), None)
-        if root is None or info.get("name", "") in disabled:
+        if (root is None or info.get("name", "") in disabled
+                or not skill_is_selected(enabled, info.get("name", ""))):
             continue
         yield cmd_key, info, sp.parent.relative_to(root).parts
 

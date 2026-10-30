@@ -21,6 +21,7 @@ from hermes_constants import (
 
 from agent.model_metadata import CHARS_PER_TOKEN
 from agent.runtime_cwd import resolve_agent_cwd
+from agent.skill_selection import get_enabled_skill_names, is_enabled_entry, skill_is_selected
 from agent.skill_utils import (
     EXCLUDED_SKILL_DIRS, SKILL_SUPPORT_DIRS,
     TIER_LOCAL, clip_skill_description, extract_skill_conditions, extract_skill_description,
@@ -1197,12 +1198,13 @@ def _plugin_skill_prompt_rows(
     The qualified ``plugin:skill`` name is exactly what ``skill_view`` resolves, and disabling
     or unloading a plugin removes its registry entries, so enablement gating is inherent."""
     rows: list[tuple[str, str]] = []
+    enabled = get_enabled_skill_names(session_platform)
     try:
         from hermes_cli.plugins import discover_plugins, get_plugin_manager
         discover_plugins()  # idempotent; joins an in-flight discovery (same call skills_list makes)
         for meta in get_plugin_manager().list_plugin_skill_metadata():
             name = str(meta.get("name") or "")
-            if not name or name in disabled:
+            if not name or name in disabled or not skill_is_selected(enabled, name):
                 continue
             frontmatter = meta.get("frontmatter") or {}
             if not (skill_matches_platform(frontmatter) and skill_matches_environment(frontmatter)
@@ -1371,6 +1373,7 @@ def _build_skills_system_prompt_inner(
     # The resolved platform is part of the key: per-platform disabled-skill lists need distinct cache entries.
     _platform_hint = _current_session_platform_hint()
     disabled = get_disabled_skill_names(_platform_hint or None)
+    enabled = get_enabled_skill_names(_platform_hint or None)
     # Plugin-registered skills (ctx.register_skill) are registry state, not files under any scanned
     # root — the snapshot manifest can't see them change, so they participate in the cache key.
     plugin_rows = _plugin_skill_prompt_rows(disabled, available_tools, available_toolsets, _platform_hint or None)
@@ -1385,7 +1388,7 @@ def _build_skills_system_prompt_inner(
         tuple(sorted(str(t) for t in (available_tools or set()))),
         tuple(sorted(str(ts) for ts in (available_toolsets or set()))),
         _platform_hint, tuple(sorted(disabled)), tuple(sorted(compact_categories or ())),
-        _oneshot_prompt_variant(), tuple(plugin_rows),
+        _oneshot_prompt_variant(), tuple(plugin_rows), enabled,
     )
     snapshot = _load_skills_snapshot(skills_dir, manifest)
     app_gated = snapshot is not None and any(
@@ -1430,7 +1433,8 @@ def _build_skills_system_prompt_inner(
          "visible": ok and not hides(entry.get("skill_name") or "", entry.get("conditions") or {})}
         for entry, ok in rows])
     visible_entries = [e for e in resolved
-                       if e["visible"] and e["status"] != "shadowed" and not is_disabled_entry(e, disabled)]
+                       if e["visible"] and e["status"] != "shadowed" and not is_disabled_entry(e, disabled)
+                       and is_enabled_entry(e, enabled)]
     _label_visible_entries(visible_entries, skills_by_category)
     if plugin_rows:
         # Same category label skills_list gives registry skills; qualified names are already

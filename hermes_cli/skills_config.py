@@ -120,6 +120,13 @@ def skills_command(args=None):
         return
 
     platform = _select_platform()
+    from agent.skill_selection import enabled_skill_names, skill_is_selected
+    enabled = enabled_skill_names(config.get("skills") or {}, platform)
+    if enabled is not None:
+        print(color("  Allowlist active: only selected skills can be toggled. Edit skills.enabled / skills.platform_enabled to admit more.", Colors.DIM))
+        skills = [s for s in skills if skill_is_selected(enabled, s["name"])]
+        if not skills:
+            return
     platform_label = PLATFORMS.get(platform, "All platforms") if platform else "All platforms"
     print()
     print(color(f"  Configure for: {platform_label}", Colors.DIM))

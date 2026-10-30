@@ -127,7 +127,11 @@ def _serve_plugin_skill(
     from hermes_cli.plugins import _get_disabled_plugins, get_plugin_manager
     from hermes_cli.plugins_content import plugin_skill_owners
     from tools import skills_tool as _st
+    from agent.skill_selection import get_enabled_skill_names, skill_is_selected
     qualified_name = f"{namespace}:{bare}"
+    enabled = get_enabled_skill_names()
+    if not skill_is_selected(enabled, qualified_name):
+        return _fail(f"Skill '{qualified_name}' is excluded by skills.enabled or skills.platform_enabled.")
     if disabled := sorted(plugin_skill_owners(get_plugin_manager(), qualified_name) & _get_disabled_plugins()):
         return _fail(f"Plugin '{disabled[0]}' is disabled. Re-enable with: hermes plugins enable {disabled[0]}")
     try:
@@ -147,7 +151,8 @@ def _serve_plugin_skill(
             "Plugin skill '%s:%s' contains patterns that may indicate prompt injection", namespace, bare)
     banner = ""
     with suppress(Exception):  # bundle-context banner: sibling skills of the same plugin
-        siblings = [s for s in get_plugin_manager().list_plugin_skills(namespace) if s != bare]
+        siblings = [s for s in get_plugin_manager().list_plugin_skills(namespace)
+                    if s != bare and skill_is_selected(enabled, f"{namespace}:{s}")]
         banner = f"[Bundle context: This skill is part of the '{namespace}' plugin." + (
             f"\nSibling skills: {', '.join(siblings)}.\nUse qualified form to invoke siblings "
             f"(e.g. {namespace}:{siblings[0]})." if siblings else "") + "]\n\n"

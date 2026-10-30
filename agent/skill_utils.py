@@ -768,6 +768,8 @@ def discover_all_skill_config_vars() -> list[dict[str, Any]]:
     """Config var declarations across all enabled, platform-compatible skills,
     deduplicated by key; each dict carries a ``skill`` attribution key."""
     all_vars: dict[str, dict[str, Any]] = {}
+    from agent.skill_selection import get_enabled_skill_names, skill_is_selected
+    enabled = get_enabled_skill_names()
     disabled = get_disabled_skill_names()
     for skills_dir in get_all_skills_dirs():
         if not skills_dir.is_dir():
@@ -778,7 +780,8 @@ def discover_all_skill_config_vars() -> list[dict[str, Any]]:
             except Exception:
                 continue
             skill_name = str(frontmatter.get("name") or skill_file.parent.name)
-            if skill_name in disabled or not skill_matches_platform(frontmatter):
+            if (skill_name in disabled or not skill_matches_platform(frontmatter)
+                    or not skill_is_selected(enabled, skill_name)):
                 continue
             for var in extract_skill_config_vars(frontmatter):
                 if var["key"] not in all_vars:

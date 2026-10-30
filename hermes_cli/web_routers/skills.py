@@ -352,6 +352,7 @@ async def get_skills(profile: Optional[str] = None):
             config = load_config()
             disabled = get_disabled_skills(config)
             skills = find_all_skills(skip_disabled=True)
+            selected_names = {s["name"] for s in find_all_skills()}
             usage = load_usage()
             # Set-based provenance (same classification as skill_usage.provenance,
             # without a per-skill manifest read): hub > bundled > external > agent.
@@ -364,7 +365,7 @@ async def get_skills(profile: Optional[str] = None):
             hub_names = _read_hub_installed_names()
             external_names = _external_skill_names() - bundled_names - hub_names
         for s in skills:
-            s["enabled"] = s["name"] not in disabled
+            s["enabled"] = s["name"] not in disabled and s["name"] in selected_names
             s["usage"] = activity_count(usage.get(s["name"], {}))
             s["provenance"] = (
                 "hub" if s["name"] in hub_names
@@ -379,12 +380,19 @@ async def get_skills(profile: Optional[str] = None):
 @router.put("/api/skills/toggle")
 async def toggle_skill(body: SkillToggle, profile: Optional[str] = None):
     from hermes_cli.skills_config import get_disabled_skills, save_disabled_skills
+    from agent.skill_selection import enabled_skill_names, is_enabled_entry
+    from tools.skills_tool import _skill_catalog
 
     def _run():
         with config_write_scope(body.profile or profile):
             config = load_config()
             disabled = get_disabled_skills(config)
             if body.enabled:
+                enabled = enabled_skill_names(config.get("skills") or {})
+                if enabled is not None and not any(
+                        s["load_name"] == body.name and is_enabled_entry(s, enabled)
+                        for s in _skill_catalog(skip_disabled=True)):
+                    raise HTTPException(status_code=409, detail="Skill is excluded by skills.enabled; update the allowlist first.")
                 disabled.discard(body.name)
             else:
                 disabled.add(body.name)

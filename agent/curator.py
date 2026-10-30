@@ -845,9 +845,12 @@ def _render_candidate_list() -> str:
     the same-tool-failure halt ends the run with zero findings.
     """
     disabled = get_disabled_skill_names()
+    from agent.skill_selection import get_enabled_skill_names, skill_is_selected
+    enabled = get_enabled_skill_names()
     rows = [
         r for r in skill_usage.curated_report()
         if not skill_usage.is_bundled(r["name"]) and r["name"] not in disabled
+        and skill_is_selected(enabled, r["name"])
     ]
     if not rows:
         return "No agent-created skills to review."
