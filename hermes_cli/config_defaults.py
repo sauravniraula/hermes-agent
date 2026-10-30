@@ -1995,11 +1995,9 @@ DEFAULT_CONFIG = {
             # Absolute cap on the embedded listing in tokens (chars/4), regardless of context size.
             # Range 200..60000.
             "listing_max_tokens": 4000,
-            # None = default/defer policy; a list keeps only these exact names eager ([] = none).
-            # Other enabled tools defer; overrides defer, never enables tools or hides bridges.
-            "eager": None,
-            # Explicit list replaces curated built-in deferrals; [] clears them, but MCP/plugin
-            # tools still defer. Ignored when eager is a list. The runtime fallback derives from this.
+            "eager_toolsets": None,  # Only these toolsets stay eager; None = legacy, [] = defer all.
+            "defer_toolsets": [],  # Additional whole toolsets to defer; eager_toolsets wins.
+            # Legacy per-tool curated deferrals; [] clears them (MCP/plugin tools still defer).
             "defer": [
                 "computer_use", "session_search", "image_generate",
                 "todo_list", "process_manage", "cronjob_manage", "browser_vault",

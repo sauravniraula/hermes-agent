@@ -998,8 +998,9 @@ changes made with `hermes tools` do not override it: update the global list or
 set it to `null` to return control to the platform picker. This selects toolsets,
 not non-toolset capabilities such as an independently authorized Bot Chat relay.
 
-Tool Search is a separate layer: `tools.tool_search.eager` decides which of
-the **enabled** tools get schemas immediately, not which tools are enabled.
+Tool Search is a separate layer: `tools.tool_search.eager_toolsets` and
+`defer_toolsets` decide which **enabled** toolsets get schemas immediately,
+not which toolsets are enabled.
 Start a new session after changing these settings; existing conversation
 tool schemas are not rewritten by this option.
 

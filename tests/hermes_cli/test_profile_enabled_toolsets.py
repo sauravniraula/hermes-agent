@@ -95,7 +95,7 @@ def test_profile_allowlist_is_scoped_to_the_current_home(tmp_path, monkeypatch):
 def test_late_plugin_and_mcp_registration_cannot_escape_allowlist(policy_config):
     import model_tools
 
-    policy_config(["file"], tools={"tool_search": {"enabled": "auto", "eager": []}})
+    policy_config(["file"], tools={"tool_search": {"enabled": "auto", "eager_toolsets": []}})
     for name, toolset in [("profile_policy_plugin", "profile-policy-plugin"), ("mcp__profile_policy__fetch", "mcp-profile-policy")]:
         registry.register(
             name=name, toolset=toolset,

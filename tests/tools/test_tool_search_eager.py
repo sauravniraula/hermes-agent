@@ -1,4 +1,4 @@
-"""An explicit eager list defers every other enabled tool, without widening scope."""
+"""An explicit eager-toolset list defers every other enabled tool, without widening scope."""
 
 import json
 from types import SimpleNamespace
@@ -33,6 +33,7 @@ def eager_tools():
             },
             handler=lambda args, **kwargs: json.dumps({"ok": True}),
         )
+    registry.register_toolset_alias("eager-test", "mcp-eager-test")
     yield names
     for name in names:
         registry.deregister(name)
@@ -47,21 +48,22 @@ def _definitions(names):
     "raw,visible",
     [
         ({}, {"terminal", "read_file", "eager_test_gui"}),
-        ({"eager": None}, {"terminal", "read_file", "eager_test_gui"}),
-        ({"eager": "terminal"}, {"terminal", "read_file", "eager_test_gui"}),
-        ({"eager": 42}, {"terminal", "read_file", "eager_test_gui"}),
-        ({"eager": {"terminal"}}, {"terminal", "read_file", "eager_test_gui"}),
-        ({"eager": ("terminal",)}, {"terminal", "read_file", "eager_test_gui"}),
-        ({"eager": []}, set()),
-        ({"eager": [" terminal "]}, set()),
-        ({"eager": ["Terminal"]}, set()),
-        ({"eager": ["mcp__eager_test__*"]}, set()),
-        ({"eager": [" terminal ", "mcp__eager_test__fetch", "", "terminal"]},
+        ({"eager_toolsets": None}, {"terminal", "read_file", "eager_test_gui"}),
+        ({"eager_toolsets": "terminal"}, {"terminal", "read_file", "eager_test_gui"}),
+        ({"eager_toolsets": 42}, {"terminal", "read_file", "eager_test_gui"}),
+        ({"eager_toolsets": {"terminal"}}, {"terminal", "read_file", "eager_test_gui"}),
+        ({"eager_toolsets": ("terminal",)}, {"terminal", "read_file", "eager_test_gui"}),
+        ({"eager_toolsets": []}, set()),
+        ({"eager_toolsets": [" terminal "]}, set()),
+        ({"eager_toolsets": ["Terminal"]}, set()),
+        ({"eager_toolsets": ["mcp-eager-*"]}, set()),
+        ({"eager_toolsets": [" terminal ", "mcp-eager-test", "", "terminal"]},
          {"terminal", "mcp__eager_test__fetch"}),
-        ({"eager": ["computer_use"], "defer": ["computer_use"]}, {"computer_use"}),
-        ({"eager": ["disabled_tool"]}, set()),
-        ({"eager": ["terminal", "read_file", "computer_use", "mcp__eager_test__fetch",
-                    "eager_test_plugin", "eager_test_gui"]},
+        ({"eager_toolsets": ["computer_use"], "defer": ["computer_use"]}, {"computer_use"}),
+        ({"eager_toolsets": ["disabled_toolset"]}, set()),
+        ({"eager_toolsets": ["eager-test"]}, {"mcp__eager_test__fetch"}),
+        ({"eager_toolsets": ["terminal", "file", "computer_use", "mcp-eager-test",
+                             "eager-test-plugin", "desktop_ui"]},
          {"terminal", "read_file", "computer_use", "mcp__eager_test__fetch",
           "eager_test_plugin", "eager_test_gui"}),
     ],
@@ -75,11 +77,11 @@ def test_eager_selection_and_legacy_fallback(eager_tools, raw, visible, caplog):
     assert result.activated == bool(names - visible)
     assert exposed == visible | (BRIDGE_TOOL_NAMES if names - visible else set())
     assert result.deferred_count == len(names - visible)
-    if raw.get("eager") is not None and not isinstance(raw["eager"], list):
-        assert "tools.tool_search.eager" in caplog.text
+    if raw.get("eager_toolsets") is not None and not isinstance(raw["eager_toolsets"], list):
+        assert "tools.tool_search.eager_toolsets" in caplog.text
 
 
-@pytest.mark.parametrize("eager", [["terminal", "mcp__eager_test__fetch", "eager_test_gui"], []])
+@pytest.mark.parametrize("eager", [["terminal", "mcp-eager-test", "desktop_ui"], []])
 def test_eager_policy_flows_through_live_config_and_bridge(tmp_path, monkeypatch, eager_tools, eager):
     """The real YAML loaders, search/describe and dispatcher must agree on the policy."""
     import model_tools
@@ -88,7 +90,7 @@ def test_eager_policy_flows_through_live_config_and_bridge(tmp_path, monkeypatch
 
     monkeypatch.setenv("HERMES_HOME", str(tmp_path))
     atomic_config_write(tmp_path / "config.yaml", {
-        "tools": {"tool_search": {"enabled": "auto", "eager": eager}},
+        "tools": {"tool_search": {"enabled": "auto", "eager_toolsets": eager}},
     })
     config = load_config_readonly()
     # Keep the GUI fixture out of this scope, even if it is named in the eager list.
@@ -97,7 +99,7 @@ def test_eager_policy_flows_through_live_config_and_bridge(tmp_path, monkeypatch
         enabled_toolsets=enabled, quiet_mode=True, skip_tool_search_assembly=True,
     )
     names = {td["function"]["name"] for td in defs}
-    visible = names & set(eager)
+    visible = names & {"terminal", "process_manage", "mcp__eager_test__fetch"} if eager else set()
     deferred = names - visible
     result = assemble_tool_defs(defs, config=config)
     assert {td["function"]["name"] for td in result.tool_defs} == visible | BRIDGE_TOOL_NAMES
@@ -154,6 +156,6 @@ def test_eager_policy_flows_through_live_config_and_bridge(tmp_path, monkeypatch
 
 def test_disabled_search_ignores_eager_allowlist(eager_tools):
     defs = _definitions(["terminal", "read_file", *eager_tools])
-    result = assemble_tool_defs(defs, config=ToolSearchConfig.from_raw({"enabled": "off", "eager": []}))
+    result = assemble_tool_defs(defs, config=ToolSearchConfig.from_raw({"enabled": "off", "eager_toolsets": []}))
     assert not result.activated
     assert result.tool_defs == defs
