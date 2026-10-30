@@ -563,6 +563,9 @@ def _platform_toolsets_explicitly_saved(config: dict, platform: str) -> bool:
     falls back to the platform default. Callers use this to tell an explicit zero-tool
     selection (fail closed, #82010) from an absent one ("no restriction").
     """
+    from hermes_cli.toolset_policy import profile_enabled_toolsets
+    if profile_enabled_toolsets(config) is not None:
+        return True
     platform_toolsets = config.get("platform_toolsets") or {}
     raw = platform_toolsets.get(platform)
     return isinstance(_coerce_platform_toolsets_value(raw, platform), list)
@@ -570,6 +573,10 @@ def _platform_toolsets_explicitly_saved(config: dict, platform: str) -> bool:
 
 def _get_platform_tools(config: dict, platform: str, *, include_default_mcp_servers: bool = True) -> set[str]:
     """Resolve which individual toolset names are enabled for a platform."""
+    from hermes_cli.toolset_policy import profile_enabled_toolsets, resolve_profile_toolsets
+    selected = profile_enabled_toolsets(config)
+    if selected is not None:
+        return resolve_profile_toolsets(config, platform, selected)
     platform_toolsets = config.get("platform_toolsets") or {}
     toolset_names = _coerce_platform_toolsets_value(platform_toolsets.get(platform), platform)
     # An explicitly saved list (even a composite like ``hermes-discord``) is an opt-in to the platform's

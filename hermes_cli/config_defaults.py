@@ -264,6 +264,7 @@ DEFAULT_CONFIG = {
         # provider or get a last-chance text fallback); "text" = always pre-analyze with
         # vision_analyze and prepend the description. vision_analyze stays a tool regardless.
         "image_input_mode": "auto",
+        "enabled_toolsets": None,  # Profile-wide allowlist; None = platform defaults, [] = no tools.
         "disabled_toolsets": [],
         # Model name (any reasonable spelling) -> effort level; overrides agent.reasoning_effort
         # when the current model matches. Edit in config.yaml (no CLI support: dots in keys).

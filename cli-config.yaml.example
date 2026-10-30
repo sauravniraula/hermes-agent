@@ -1218,6 +1218,13 @@ skills:
 # Agent Behavior
 # =============================================================================
 agent:
+  # Profile-wide toolset allowlist for EVERY platform. null preserves platform defaults;
+  # [] enables no toolsets. A list overrides platform_toolsets and implicit MCP/plugin additions.
+  # enabled_toolsets: [terminal, file, skills, web]
+  enabled_toolsets: null
+  # Global suppression still wins over the allowlist (including shared tools in bundles).
+  disabled_toolsets: []
+
   # Maximum tool-calling iterations per conversation (default: 500)
   # Higher = more room for complex tasks, but costs more tokens
   # Recommended: 20-30 for focused tasks, 50-100 for open exploration
