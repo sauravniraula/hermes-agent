@@ -10,11 +10,34 @@ from typing import Any
 from hermes_cli.inspection import platform_scope
 
 
+def _resolve_model_and_provider(cfg: dict, model: str | None, provider: str | None):
+    """Resolve inspection overrides through upstream's shared startup-route owner."""
+    from hermes_cli.model_switch import StartupModelRoute, resolve_startup_model_route
+    from hermes_cli.models import detect_static_provider_for_model
+
+    model_cfg = cfg.get("model") or {}
+    configured = (model_cfg.get("default") or model_cfg.get("model") or "") if isinstance(model_cfg, dict) else model_cfg
+    explicit = (model or "").strip() or os.environ.get("HERMES_INFERENCE_MODEL", "").strip()
+    requested_provider = (provider or "").strip()
+    if not explicit:
+        return StartupModelRoute(model=configured, provider=requested_provider)
+    current = (model_cfg.get("provider") or "") if isinstance(model_cfg, dict) else ""
+    current = requested_provider or current or os.environ.get("HERMES_INFERENCE_PROVIDER", "") or "auto"
+    route = resolve_startup_model_route(
+        explicit, explicit_provider=requested_provider, current_provider=current,
+        user_providers=cfg.get("providers"), custom_providers=cfg.get("custom_providers"), alias_config=cfg,
+    )
+    if route is not None:
+        return route
+    detected = None if requested_provider else detect_static_provider_for_model(explicit, current)
+    return (StartupModelRoute(model=detected[1], provider=detected[0]) if detected
+            else StartupModelRoute(model=explicit, provider=requested_provider))
+
+
 def _build_agent(platform: str, model: str | None, provider: str | None):
     from agent.skill_utils import parse_config_string_list
     from hermes_cli.config import load_config
     from hermes_cli.mcp_startup import ensure_mcp_discovery_before_agent_build
-    from hermes_cli.oneshot import _resolve_model_and_provider
     from hermes_cli.runtime_provider import resolve_runtime_provider
     from hermes_cli.tools_config import _get_platform_tools
     from hermes_constants import resolve_reasoning_config

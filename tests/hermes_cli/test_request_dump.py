@@ -3,6 +3,33 @@
 from pathlib import Path
 
 
+def test_model_resolution_keeps_configured_default_and_explicit_override(monkeypatch):
+    from hermes_cli.request_dump import _resolve_model_and_provider
+
+    monkeypatch.delenv("HERMES_INFERENCE_MODEL", raising=False)
+    cfg = {"model": {"default": "saved-model", "provider": "custom:saved"}}
+    choice = _resolve_model_and_provider(cfg, None, None)
+    assert choice.model == "saved-model" and not choice.provider
+    choice = _resolve_model_and_provider(cfg, "override-model", "custom:override")
+    assert choice.model == "override-model" and choice.provider == "custom:override"
+
+
+def test_model_resolution_uses_snapshot_alias_route_and_credentials(monkeypatch):
+    from hermes_cli.request_dump import _resolve_model_and_provider
+    from hermes_cli.model_switch import StartupModelRoute
+
+    cfg = {"model": {"default": "saved-model"}, "model_aliases": {"local": "unused"}}
+    route = StartupModelRoute("local-model", "custom", "http://localhost:8080/v1", "test-alias-key")
+
+    def resolve(model, **kwargs):
+        assert model == "local"
+        assert kwargs["alias_config"] is cfg
+        return route
+
+    monkeypatch.setattr("hermes_cli.model_switch.resolve_startup_model_route", resolve)
+    assert _resolve_model_and_provider(cfg, "local", None) == route
+
+
 def test_request_dump_parser_defaults_to_cli_and_empty_prompt(tmp_path):
     from hermes_cli.main import _build_cli_parser
 
