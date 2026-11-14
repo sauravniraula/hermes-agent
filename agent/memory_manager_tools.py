@@ -30,7 +30,7 @@ def memory_provider_tools_enabled(enabled_toolsets: Optional[list[str]], disable
     from hermes_cli.toolset_policy import profile_allows_toolset
     if not profile_allows_toolset("memory"):
         return False
-    if disabled_toolsets and "memory" in disabled_toolsets:
+    if disabled_toolsets and {"memory", "all", "*"}.intersection(disabled_toolsets):
         return False
     if memory_tool_present or enabled_toolsets is None:
         return True
