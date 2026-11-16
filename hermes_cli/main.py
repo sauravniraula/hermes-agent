@@ -178,15 +178,15 @@ def _config_default_interface_early() -> str:
     cfg_path = _early_interface_config_path()
     if _EARLY_INTERFACE_CACHE is not None and _EARLY_INTERFACE_CACHE[0] == cfg_path:
         return _EARLY_INTERFACE_CACHE[1]
-    value = "cli"
+    value = "tui"
     try:
         if config_exists(cfg_path):
             raw = read_config_doc(cfg_path) or {}
             disp = raw.get("display", {})
             if isinstance(disp, dict):
                 iface = disp.get("interface")
-                if isinstance(iface, str) and iface.strip().lower() == "tui":
-                    value = "tui"
+                if isinstance(iface, str) and iface.strip().lower() in {"cli", "tui"}:
+                    value = iface.strip().lower()
     except Exception:
         value = "cli"  # best-effort — default to classic REPL on any error
     _EARLY_INTERFACE_CACHE = (cfg_path, value)

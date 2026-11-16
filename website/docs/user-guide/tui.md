@@ -40,16 +40,16 @@ hermes          # now uses the TUI
 hermes chat     # same
 ```
 
-Or make it the persistent default in `~/.hermes/config.yaml`:
+The TUI is the default interactive interface. To set the preference explicitly in `~/.hermes/config.yaml`:
 
 ```yaml
 display:
-  interface: tui   # "cli" (default) or "tui"
+  interface: tui   # "tui" (default) or "cli"
 ```
 
 With `display.interface: tui`, a bare `hermes` (and `hermes chat`) launches the TUI. Explicit flags always win — run `hermes --cli` to drop back to the classic REPL for a single invocation, or `hermes --tui` / `HERMES_TUI=1` to force the TUI when the config default is `cli`.
 
-The classic CLI remains the shipped default. Anything documented in [CLI Interface](cli.md) — slash commands, quick commands, skill preloading, personalities, multi-line input, interrupts — works in the TUI identically.
+The TUI is the shipped interactive default, with compact display and the `mono` skin. Existing explicit display preferences are preserved. Anything documented in [CLI Interface](cli.md) — slash commands, quick commands, skill preloading, personalities, multi-line input, interrupts — works in the TUI identically.
 
 ## Why the TUI
 
@@ -310,7 +310,7 @@ The TUI, `hermes chat`, the Desktop app and your messaging platforms already sha
 
 ## Reverting to the classic CLI
 
-Launching `hermes` (without `--tui`) stays on the classic CLI by default. To make a machine prefer the TUI, set `display.interface: tui` in `~/.hermes/config.yaml` (persistent) or `HERMES_TUI=1` in your shell profile (per-shell). To go back, set `interface: cli` / unset the env var, or pass `hermes --cli` for a one-off.
+Launching `hermes` (without `--tui`) uses the TUI by default in an interactive terminal. To prefer the classic CLI, set `display.interface: cli` in `~/.hermes/config.yaml` and unset `HERMES_TUI`, or pass `hermes --cli` for a one-off. Non-interactive invocations stay on the CLI.
 
 If the TUI fails to launch (no Node, missing bundle, TTY issue), Hermes prints a diagnostic and falls back — rather than leaving you stuck.
 

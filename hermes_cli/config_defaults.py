@@ -801,7 +801,7 @@ DEFAULT_CONFIG = {
     },
 
     "display": {
-        "compact": False,
+        "compact": True,
         "personality": "",
         "resume_display": "full",
         # Recap tuning for /resume and startup resume.
@@ -822,7 +822,7 @@ DEFAULT_CONFIG = {
         "cli_multiline_shortcuts": True,
         # `hermes`/`hermes chat` launches "cli" (prompt_toolkit REPL) | "tui" (Ink); --cli, --tui, HERMES_TUI=1 win.
         # cli_layout = the REPL's look: "modern" (glyph rows, status under the composer) | "classic" (boxed panels).
-        "interface": "cli", "cli_layout": "modern",
+        "interface": "tui", "cli_layout": "modern",
         # Native TUI uses the terminal's primary buffer and scrollback instead of the custom
         # alternate-screen viewport. Flags win: `--native` / `--tui-native` and `--cli`.
         "tui_native": False,
@@ -881,7 +881,7 @@ DEFAULT_CONFIG = {
         # /focus off restores. Never affects what the model sees (focus_view.py).
         "focus_view": False,
         "focus_saved_tool_progress": "all",
-        "skin": "default",
+        "skin": "mono",
         # UI language for static messages (approval prompts, some gateway slash replies); not agent
         # responses/logs/tool outputs. en, zh, ja, de, es, fr, tr, uk; unknown → en.
         "language": "en",
