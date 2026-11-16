@@ -62,12 +62,13 @@ def _tool_rows(raw: list, direct_definitions: list) -> list[dict]:
 
 def _render_tools(data: dict) -> str:
     counts = data["counts"]
+    name_width = max(40, max((len(row["name"]) for row in data["tools"]), default=0))
     lines = [f"Tools breakdown (platform={data['platform']}; estimated tokens, not billed usage)",
              f"Active: {counts['active']} | Direct: {counts['direct']} | Deferred: {counts['deferred']}",
              f"Direct schema payload: ~{data['direct_schema_tokens']:,} tokens",
              "Deferred full-schema sizes are on-demand costs; their catalog is included in the direct bridge.",
-             "", f"{'Tool':<40} {'Disclosure':<10} {'Schema tokens':>14} {'Upfront':>9}"]
-    lines.extend(f"{r['name']:<40} {r['disclosure']:<10} {r['tokens']:>14,} {r['upfront_tokens']:>9,}"
+             "", f"{'Tool':<{name_width}} {'Disclosure':<10} {'Schema tokens':>14} {'Upfront':>9}"]
+    lines.extend(f"{r['name']:<{name_width}} {r['disclosure']:<10} {r['tokens']:>14,} {r['upfront_tokens']:>9,}"
                  for r in data["tools"])
     return "\n".join(lines)
 
@@ -150,14 +151,15 @@ def compute_skills_breakdown(platform: str = "cli") -> dict:
 
 
 def _render_skills(data: dict) -> str:
+    name_width = max(45, max((len(row["name"]) for row in data["skills"]), default=0))
     lines = [f"Skills breakdown (platform={data['platform']}; estimated tokens, not billed usage)",
              f"Enabled: {data['count']} | Complete index: ~{data['index_total_tokens']:,} tokens",
              "Index = advertised entry; file = raw SKILL.md if read, not a sum paid upfront.",
              "Shared index headings are included only in the complete-index total.",
-             "", f"{'Skill':<45} {'Index tokens':>13} {'File tokens':>13}"]
+             "", f"{'Skill':<{name_width}} {'Index tokens':>13} {'File tokens':>13}"]
     for row in data["skills"]:
         file_cost = f"{row['file_tokens']:,}" if row["file_tokens"] is not None else "n/a"
-        lines.append(f"{row['name']:<45} {row['index_tokens']:>13,} {file_cost:>13}")
+        lines.append(f"{row['name']:<{name_width}} {row['index_tokens']:>13,} {file_cost:>13}")
     return "\n".join(lines)
 
 
