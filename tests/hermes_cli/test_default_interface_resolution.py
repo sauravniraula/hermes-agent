@@ -1,15 +1,15 @@
 """Tests for the configurable default interface (cli vs tui).
 
-`hermes` launches the classic prompt_toolkit REPL by default, but users can
-flip ``display.interface: tui`` in config.yaml to make the modern Ink TUI the
-default for bare ``hermes`` / ``hermes chat``. Explicit flags always win:
+`hermes` launches the modern Ink TUI by default, but users can set
+``display.interface: cli`` in config.yaml to use the classic prompt_toolkit
+REPL for bare ``hermes`` / ``hermes chat``. Explicit flags always win:
 
     --cli                forces the classic REPL (highest precedence)
     --tui                forces the TUI
     (no TTY)             forces the classic REPL — ambient prefs don't apply
     HERMES_TUI=1         the env default
     display.interface    the configured default
-    (unset)              classic REPL
+    (unset)              Ink TUI
 
 The no-TTY gate exists because ambient TUI preferences must never hijack
 non-interactive invocations: kanban workers / cron / pipelines run
@@ -111,11 +111,12 @@ class TestWantsTuiEarly:
         home_with_interface("cli")
         assert m._wants_tui_early([]) is False
 
-    def test_missing_config_defaults_to_cli(self, tmp_path, monkeypatch):
+    def test_missing_config_defaults_to_tui(self, tmp_path, monkeypatch):
         # HERMES_HOME points at an empty dir — no config.yaml.
+        _fake_tty(monkeypatch, True)
         monkeypatch.setenv("HERMES_HOME", str(tmp_path))
         monkeypatch.setattr(m, "_EARLY_INTERFACE_CACHE", None)
-        assert m._wants_tui_early([]) is False
+        assert m._wants_tui_early([]) is True
 
     def test_unreadable_config_defaults_to_cli(self, tmp_path, monkeypatch):
         # Garbage YAML must not crash the hot path; falls back to cli.
@@ -190,5 +191,5 @@ class TestParserFlags:
 
 
 # ---------------------------------------------------------------------------
-# config default — shipped default preserves classic behavior
+# config default — interactive TUI, with explicit CLI and no-TTY overrides
 # ---------------------------------------------------------------------------

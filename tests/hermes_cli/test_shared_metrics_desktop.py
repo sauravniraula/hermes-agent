@@ -191,8 +191,11 @@ def test_dislike_targets_are_closed_per_signal(marks):
 
 
 def test_setting_change_sends_only_the_schema_key_and_the_backend_decides_the_direction(marks):
+    from hermes_cli.config import DEFAULT_CONFIG
+
+    display = DEFAULT_CONFIG["display"]
     config = marks.home / "config.yaml"
-    config.write_text("display:\n  compact: true\n  skin: default\n")
+    config.write_text(f"display:\n  compact: {str(not display['compact']).lower()}\n  skin: {display['skin']}\n")
     _rpc("shared_metrics.desktop_dislike", signal="setting_off_default", setting="display.compact")
     _rpc("shared_metrics.desktop_dislike", signal="setting_off_default", setting="display.skin")
     _rpc("shared_metrics.desktop_dislike", signal="setting_off_default", setting="providers.my-secret-box.api_key")

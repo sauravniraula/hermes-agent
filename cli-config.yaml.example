@@ -1986,10 +1986,13 @@ delegation:
 # Display
 # =============================================================================
 display:
+  # Default interactive interface. --cli / --tui override it; pipes stay on the CLI.
+  interface: tui
+
   # Use compact banner mode (hides the ASCII-art banner, shows a single line).
-  #   true:  Compact single-line banner
-  #   false: Full ASCII banner with tool/skill summary (default)
-  compact: false
+  #   true:  Compact single-line banner (default)
+  #   false: Full ASCII banner with tool/skill summary
+  compact: true
 
   # Tool progress display level (CLI, gateway, and the TUI/Desktop tool feed)
   #   off:     Silent — no tool activity shown, just the final response
@@ -2171,7 +2174,7 @@ display:
   #     prompt_symbol: "⚔"                  # Prompt symbol (bare token; renderers add trailing space)
   #   tool_prefix: "╎"                       # Tool output line prefix (default: ┊)
   #
-  skin: default
+  skin: mono
 
 # =============================================================================
 # Model Aliases — short names for /model command
